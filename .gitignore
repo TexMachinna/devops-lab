@@ -480,3 +480,27 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# --- devops-lab additions ---
+# Python (inventory-api)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# PHP (supplier-portal)
+vendor/
+
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kubeconfig*
+
+# OS / WSL noise
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
