@@ -3,6 +3,7 @@
 What I broke on purpose, how I found out, and what I'd say about it in an interview.
 Fill each entry **before** looking anything up: write your guess first, then confirm it.
 
+
 **Entry format:**
 
 - **Symptom:** what I saw (copy the exact error line)
