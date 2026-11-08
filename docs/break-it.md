@@ -53,10 +53,13 @@ Can't push to main, or merge from a PR
 - **My guess:**
 I deliverately changed a value from a .cs test file so the condition couldn't be met and the test would fail
 - **Confirmed with:**
-Running 'dotnet test', which confirmed that one of the tests failed, also, the workflow dedicated to this task (cs.yml) reported the failure
+Running 'dotnet test', which confirmed that one of the tests failed, also, the workflow dedicated to this task (cs.yml) reported the failure, and finally, the merge attempt triggered a message saying the branch policy prohibited the merge
 - **Cause:**
+Branch protection blocking merge attempts if a step in the designated workflow failed
 - **Fix:**
+Restore the correct value in the test .cs file and re-attempt the PR
 - **Interview line:**
+Branch protection + automated checks and rules that prohibit autmatic and unchecked merges to main (prod) is what makes the CI part of GitOps work
 
 ### 1.2 Why `--force-with-lease` and not `--force`
 
