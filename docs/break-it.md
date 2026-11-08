@@ -49,8 +49,11 @@ checking its status, pull its logs and start the service again
 ### 1.1 Direct push to `main`
 
 - **Symptom:**
+Can't push to main, or merge from a PR
 - **My guess:**
+I deliverately changed a value from a .cs test file so the condition couldn't be met and the test would fail
 - **Confirmed with:**
+Running 'dotnet test', which confirmed that one of the tests failed, also, the workflow dedicated to this task (cs.yml) reported the failure
 - **Cause:**
 - **Fix:**
 - **Interview line:**
