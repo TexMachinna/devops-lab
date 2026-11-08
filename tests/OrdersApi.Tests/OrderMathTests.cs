@@ -5,7 +5,7 @@ public class OrderMathTests
     [Fact]
     public void Total_MultipliesPriceByQuantity()
     {
-        Assert.Equal(30m, OrderMath.Total(10m, 5));
+       Assert.Equal(30m, OrderMath.Total(10m, 3));
     }
 
     [Fact]
