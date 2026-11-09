@@ -4,12 +4,26 @@ on: # Triggers with
     push:
         branches: [main] # every merge to main
     pull_request: # every PR, on every new commit
+    workflow_dispatch:
+      inputs:
+        reason:
+          description: 'Why are you running this manually?'
+          type: string
+          required: false
+          default: 'manual test'
 
 jobs:
     build: # job id; the ruleset will require "build"
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6 # get the code; the runner starts empty
+
+            - name: Show trigger
+              env:
+                EVENT: ${{ github.event_name }}
+                REASON: ${{ inputs.reason }}
+              run: | 
+                echo "Triggered by $EVENT. Reason: ${REASON:-n/a}"
 
             - uses: actions/setup-dotnet@v5
               with:
