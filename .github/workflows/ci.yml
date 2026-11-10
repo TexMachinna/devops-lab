@@ -1,44 +1,58 @@
 name: CI
 
 on: # Triggers with
-    push:
-        branches: [main] # every merge to main
-        paths:
-          - 'src/orders-api/**'
-          - 'tests/OrdersApi.Tests/**'
-          - 'devops-lab.slnx'
-          - '.github/workflows/ci.yml'
-    pull_request: # every PR, on every new commit
-    workflow_dispatch:
-      inputs:
-        reason:
-          description: 'Why are you running this manually?'
-          type: string
-          required: false
-          default: 'manual test'
+  push:
+    branches: [main] # every merge to main
+    paths:
+      - "src/orders-api/**"
+      - "tests/OrdersApi.Tests/**"
+      - "devops-lab.slnx"
+      - ".github/workflows/ci.yml"
+  pull_request: # every PR, on every new commit
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why are you running this manually?"
+        type: string
+        required: false
+        default: "manual test"
 
 jobs:
-    build: # job id; the ruleset will require "build"
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v6 # get the code; the runner starts empty
+  build: # job id; the ruleset will require "build"
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6 # get the code; the runner starts empty
 
-            - name: Show trigger
-              env:
-                EVENT: ${{ github.event_name }}
-                REASON: ${{ inputs.reason }}
-              run: | 
-                echo "Triggered by $EVENT. Reason: ${REASON:-n/a}"
+      - name: Show trigger
+        env:
+          EVENT: ${{ github.event_name }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          echo "Triggered by $EVENT. Reason: ${REASON:-n/a}"
 
-            - uses: actions/setup-dotnet@v5
-              with:
-                  dotnet-version: "10.0.x"
-
-            - name: Restore
-              run: dotnet restore # download NuGet packages
-
-            - name: Build
-              run: dotnet build --no-restore -c Release
-
-            - name: Test
-              run: dotnet test --no-build -c Release
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      - name: Compute short tag
+        id: vars
+        run: |
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+  
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Show tag from build
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          echo "Testing commit $TAG"
+      - run: dotnet test -c Release
