@@ -62,39 +62,56 @@ Restore the correct value in the test .cs file and re-attempt the PR
 Branch protection + automated checks and rules that prohibit autmatic and unchecked merges to main (prod) is what makes the CI part of GitOps work
 
 ### 1.2 Why `--force-with-lease` and not `--force`
-
-- **Answer in one line:**
+`--force` overwrites the remote branch no matter what; `--force-with-lease` only overwrites it if it's still where I last fetched it, so I can't silently delete a teammate's commits.
 
 ## Stage 2 — First CI workflow
 
 ### 2.1 A failing test on a pull request
 
 - **Symptom:**
+PR `breakit/stage2` showed `build` failed, but `gh pr merge --squash --delete-branch` still merged it, and the next run on `main` went red too.
 - **My guess:**
+The merge should have been blocked; something in branch protection was off.
 - **Confirmed with:**
+`gh run list --limit 5` (red PR run, then red `main` run), the ruleset JSON (`gh api repos/{owner}/{repo}/rulesets/<id>`), and the test log: `<Assert.Equal() Failure line>`.
 - **Cause:**
+The ruleset required a pull request but had no `required_status_checks` rule, so a red PR was still mergeable.
 - **Fix:**
+Added "Require status checks to pass" with the `build` check (GitHub Actions), fixed the test through a new PR, then repeated the drill; a red PR is now blocked.
 - **Interview line:**
+"Requiring a PR isn't enough; you have to require the CI check, and then prove it by trying to merge a red PR."
 
 ### 2.2 Workflow without `actions/checkout`
 
 - **Symptom:**
+The run failed at the restore step within seconds
 - **My guess:**
+The runner had no code to build.
 - **Confirmed with:**
+Step log: `<e.g. MSB1003: ... does not contain a project or solution file>`
 - **Cause:**
+Every job starts on a fresh, empty VM; without `actions/checkout` the repo is never downloaded.
 - **Fix:**
+Restored `- uses: actions/checkout@v6` as the first step.
 - **Interview line:**
+"Runners are ephemeral and start empty: checkout is always step one, and each job needs its own."
 
 ## Stage 3 — Triggers, jobs, outputs, cache
 
 ### 3.1 README-only PR never gets its required check
 
 - **Symptom:**
+After adding the dotnet paths to ci.yml for both push and pull, the action will get stuck when trying to merge a change outside said filters
 - **My guess:**
+Having the paths added to pull requests makes the branch policy to be respected, but since the action won't get triggered, it will stay stuck
 - **Confirmed with:**
+GitHub UI's error: Expected — Waiting for status to be reported
 - **Cause:**
+Paths added to the pull request section in ci.yml triggers
 - **Fix:**
+Removed the paths from the pull request section
 - **Interview line:**
+One must be cautious when it comes to path filtering for workflow triggers, and avoid repeating paths for both push and pulls, since this will trigger branch protection policies, but won't do the same for workflows, and thus the merge attempts will stay stuck.
 
 ### 3.2 Which job does the ruleset actually require?
 

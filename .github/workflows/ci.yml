@@ -3,13 +3,12 @@ name: CI
 on: # Triggers with
     push:
         branches: [main] # every merge to main
-        paths: &dotnet_paths
+        paths:
           - 'src/orders-api/**'
           - 'tests/OrdersApi.Tests/**'
           - 'devops-lab.slnx'
           - '.github/workflows/ci.yml'
     pull_request: # every PR, on every new commit
-      paths: *dotnet_paths
     workflow_dispatch:
       inputs:
         reason:
