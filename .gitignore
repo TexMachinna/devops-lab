@@ -504,3 +504,6 @@ kubeconfig*
 .DS_Store
 Thumbs.db
 *:Zone.Identifier
+
+# VSCode settings
+.vscode
