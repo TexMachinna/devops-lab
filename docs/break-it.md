@@ -116,7 +116,9 @@ One must be cautious when it comes to path filtering for workflow triggers, and 
 ### 3.2 Which job does the ruleset actually require?
 
 - **What I found:**
+build and test
 - **What I changed:**
+added both jobs to the ruleset condition for main
 
 ## Stage 4 — Docker by hand
 
