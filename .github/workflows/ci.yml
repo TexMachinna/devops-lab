@@ -55,4 +55,13 @@ jobs:
           TAG: ${{ needs.build.outputs.tag }}
         run: |
           echo "Testing commit $TAG"
-      - run: dotnet test -c Release
+      - name: Test
+        run: dotnet test -c Release --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          retention-days: 7
