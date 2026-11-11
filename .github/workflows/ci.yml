@@ -29,6 +29,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6 # get the code; the runner starts empty
 
+      - name: Show variable and secret
+        env:
+          APP_NAME: ${{ vars.APP_NAME }}
+          DEMO_SECRET: ${{ secrets.DEMO_SECRET }}
+        run: |
+          echo "App name: $APP_NAME"
+          echo "Secret: $DEMO_SECRET"
+          echo "Secret length: ${#DEMO_SECRET}"
+
       - name: Show trigger
         env:
           EVENT: ${{ github.event_name }}
