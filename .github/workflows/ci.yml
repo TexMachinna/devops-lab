@@ -17,6 +17,10 @@ on: # Triggers with
         required: false
         default: "manual test"
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build: # job id; the ruleset will require "build"
     runs-on: ubuntu-latest
