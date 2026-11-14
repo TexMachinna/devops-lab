@@ -12,6 +12,8 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+ARG GIT_SHA=unknown
+LABEL org.opencontainer.image.revision=$GIT_SHA
 
 USER $APP_UID
 EXPOSE 8080
