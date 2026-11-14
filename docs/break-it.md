@@ -125,11 +125,17 @@ added both jobs to the ruleset condition for main
 ### 4.1 A secret baked into the image
 
 - **Symptom:**
+There's a dummy secret backed-in a docker image
 - **My guess:**
+I intentionally left a docker secret backed in a .env file in my docker image
 - **Confirmed with:**
+docker run --rm <image name> cat .env
 - **Cause:**
+Left a secret in a .env file
 - **Fix:**
+Removed the secret from the .env file, and also added .env files to my .dockerignore file
 - **Interview line:**
+Secrets can be passed to images at runtime, but never backed inside the image itself
 
 ## Stage 5 — Multi-stage .NET image
 
