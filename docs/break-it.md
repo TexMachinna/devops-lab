@@ -142,11 +142,16 @@ Secrets can be passed to images at runtime, but never backed inside the image it
 ### 5.1 Container started, but the browser can't reach it (`-p 5000:80`)
 
 - **Symptom:**
+Up, but curl returns Connection reset by peer
 - **My guess:**
 - **Confirmed with:**
+docker logs (listening on 8080) versus docker port (80 mapped), also "ASPNETCORE_HTTP_PORTS=8080" in the app's JSON config (docker inspect image)
 - **Cause:**
+5000:80 forwarded to a port nothing was listening on
 - **Fix:**
+-p 5000:8080, the container-side port must match the app's port
 - **Interview line:**
+"Up doesn't mean reachable. I compare the port the app logs with the port mapping."
 
 ## Stage 6 — Drills
 
