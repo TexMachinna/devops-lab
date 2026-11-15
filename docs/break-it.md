@@ -158,39 +158,65 @@ docker logs (listening on 8080) versus docker port (80 mapped), also "ASPNETCORE
 ### 6.1 App dies at startup
 
 - **Symptom:**
+My dotnet app container isn't running
 - **Status / code from `docker ps -a`:**
+Exited (139)
 - **My guess:**
+Logs need to be checked in order to confirm what caused the error from (docker ps -a)
 - **Confirmed with:**
+docker logs <container>: got the following stack trace = Unhandled exception. System.InvalidOperationException: Crash drill: CRASH_ON_START is set
+   at Program.<Main>$(String[] args) in /src/Program.cs:line 4
 - **Cause:**
+An env variable that I intentionally added to Program.cs, which caused the app to crash on startup
 - **Fix:**
+Either remove the env variable from the code, or don't pass the value to the variable at runtime. exit code 139, which is 139 - 128 = code 11/SEGV(segmentation fault) would have me chasing a memory bug, while the stack trace would point me towards the real issue
 - **Interview line:**
+Docker exit codes can tell us how a container died, but logs and stack traces reveal the actual cause, making them the first thing to check
 
 ### 6.2 Memory limit
 
 - **Symptom:**
+Container died as soon as I tried to run it
 - **Status / code from `docker ps -a`:**
+Exited (137), 137 - 128 = code 9 KILL
 - **What `docker inspect` says:**
+"OOMKilled": true
 - **Cause:**
+[docker run -m 64m --memory-swap 64m --name oom inventory-api:dev python -c "b = bytearray(512 * 1024 * 1024)"], swap limit was the same as the MBs assigned to the container, which means swap was off, and then an array of 512MB was passed to the container, causing it to crash the container since there was no space in memory for it. In this case, there where no logs from [docker logs], so my only troubleshooting clue was the exit code from docker
 - **Fix:**
+Don't exceed a container's memory limit
 - **Interview line:**
+A container's memory limit covers all its processes. Exceed it with no swap and the kernel OOM-kills it: 137 and OOMKilled=true, with no stack trace
 
 ### 6.3 App is up but unreachable
 
 - **Symptom:**
+A container doesn't respond through its configured port
 - **My guess:**
+Wrong Dockerfile configuration, specifically the port being used by the app
 - **Confirmed with (from inside the container):**
+[docker exec <container name> python -c "import urllib.request; print(urllib.request.urlopen('https://127.0.0.1:8000/health').read())]
 - **Cause:**
+Dockerfile was intentionally configured to use 127.0.0.1 instead of its usual 0.0.0.0 port. This is the container's loopback port, and only connections within the container were allowed
 - **Fix:**
+Changed the port binding in the Dockerfile to use 0.0.0.0 as it should
 - **Interview line:**
+Running doesn't mean reachable. In containers, apps must bind 0.0.0.0, because 127.0.0.1 is the container's own loopback
 
 ### 6.4 Build can't find a file
 
 - **Symptom:**
+Can't build an image using docker build -f
 - **My guess:**
+Docker can't find the correct files
 - **Confirmed with:**
+Running docker -f with no files. I've also tried again with the right folder, but no more context
 - **Cause:**
+Missing context at the end of the command, ergo, docker couldn't find the right requirements.txt file
 - **Fix:**
+Pointed docker build -f to the right source context at the end of the command
 - **Interview line:**
+-f picks the recipe, the context picks the ingredients, and COPY only sees what's in the context
 
 ### 6.5 Old code still running
 
@@ -200,20 +226,29 @@ docker logs (listening on 8080) versus docker port (80 mapped), also "ASPNETCORE
 - **Fix:**
 - **Interview line:**
 
-## Stage 7 — Image pipeline to GHCR
+## Stage 7 — Lab registry, self-hosted runner and image pipeline
 
-### 7.1 Missing `packages: write`
+### 7.1 Runner offline during a merge
 
-- **Symptom:**
+- **Symptom (job status and message):**
 - **My guess:**
 - **Confirmed with:**
 - **Cause:**
 - **Fix:**
 - **Interview line:**
 
-### 7.2 Pull request builds the image but doesn't push it
+### 7.2 Registry down during a publish
 
-- **Log line that proves it:**
+- **Symptom (exact push error):**
+- **My guess:**
+- **Confirmed with:**
+- **Cause:**
+- **Fix:**
+- **Interview line:**
+
+### 7.3 Pull request: image-check ran, image-publish skipped
+
+- **Where each job ran (runner name), and the log line that proves nothing was pushed:**
 
 ## Stage 8 — Reusable workflow and monorepo
 
@@ -229,12 +264,11 @@ docker logs (listening on 8080) versus docker port (80 mapped), also "ASPNETCORE
 
 - **What `ci-ok` did, and why:**
 
-### 8.4 Caller without `packages: write`
+### 8.4 One runner, two queued publish jobs
 
-- **Symptom:**
-- **Where it failed:**
-- **Cause:**
-- **Interview line:**
+- **What happened while the runner was stopped:**
+- **What happened after it started again (order, timing):**
+- **What this means for a team, and how teams solve it:**
 
 ## Stage 9 — Hand-off to the config repo
 
@@ -255,12 +289,13 @@ docker logs (listening on 8080) versus docker port (80 mapped), also "ASPNETCORE
 
 - **What `concurrency` did:**
 
-## Bonus — ACR with OIDC
+## Bonus — Registry login and a hardened runner
 
-### B.1 Tag push and the Azure login
+### B.1 Wrong registry password
 
-- **Symptom (AADSTS error):**
+- **Symptom (the login step's error):**
 - **My guess:**
+- **Confirmed with:**
 - **Cause:**
-- **Decision (second credential or no tag builds), and why:**
+- **Fix:**
 - **Interview line:**
