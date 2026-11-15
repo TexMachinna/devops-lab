@@ -221,10 +221,15 @@ Pointed docker build -f to the right source context at the end of the command
 ### 6.5 Old code still running
 
 - **Symptom:**
+Running container doesn't show the newest changes
 - **How I proved which commit was running:**
+By checking the image GHA property with [docker inspect stale --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'] and comparing it against GitHub's most recent commits [git log --oneline -2]
 - **Cause:**
+The container is using the image version that was built before the changes
 - **Fix:**
+Re-built the image, ran the container again and now it has the newest changes + the correct GHA SHA
 - **Interview line:**
+When a fix doesn't show up, I check which image is actually running: its revision label or digest against the commit I expected
 
 ## Stage 7 — Lab registry, self-hosted runner and image pipeline
 

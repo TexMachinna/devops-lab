@@ -13,7 +13,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Liveness check: Docker, CI and Kubernetes call this
-app.MapGet("/health", () => Results.Ok(new { status = "ok", version = "v2" }));
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 // Which environment am I in, and what config did I load?
 app.MapGet("/api/info", (IConfiguration config, IWebHostEnvironment env) =>
