@@ -368,4 +368,53 @@ stage9() {
   wfcheck "commit message links to the run" 'actions/runs/\$\{\{ *github\.run_id' "\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}"
   local pc=$PLATFORM_CONFIG_DIR app="$PLATFORM_CONFIG_DIR/apps/orders-api"
   if [ ! -d "$pc/.git" ]; then
-    fail "platform-config clone found at $pc" "clone it next to devops-lab, or set PLATFORM_C
+    fail "platform-config clone found at $pc" "clone it next to devops-lab, or set PLATFORM_CONFIG_DIR"; return
+  fi
+  pass "platform-config clone found at $pc"
+  check "base deployment exists" "apps/orders-api/base/deployment.yaml" test -f "$app/base/deployment.yaml"
+  local o; for o in dev stg prd; do
+    check "overlay $o exists" "apps/orders-api/overlays/$o/kustomization.yaml" test -f "$app/overlays/$o/kustomization.yaml"
+  done
+  local devk="$app/overlays/dev/kustomization.yaml"
+  if grep -Eq 'newTag: *["'\'']?latest' "$devk" 2>/dev/null; then fail "dev overlay pins a real tag" "never deploy latest"
+  else check "dev overlay pins a tag" "images: - name/newName/newTag" grep -q 'newTag:' "$devk"; fi
+  if have kubectl; then
+    check "dev overlay renders" "kubectl kustomize $app/overlays/dev" kubectl kustomize "$app/overlays/dev"
+  elif have kustomize; then
+    check "dev overlay renders" "kustomize build $app/overlays/dev" kustomize build "$app/overlays/dev"
+  else skip "dev overlay renders" "install kubectl"; fi
+  check "CI has committed to platform-config" "git -C $pc pull first; author must be ci-bot" \
+    sh -c "git -C '$pc' log --author=ci-bot --oneline | grep -q ."
+}
+
+stagebonus() {
+  title bonus "Registry login and a hardened runner"
+  wfcheck "logs in with docker/login-action" 'docker/login-action@' "before build-push-action in the publish job"
+  wfcheck "registry username comes from a secret" 'username: *\$\{\{ *secrets\.' "username: \${{ secrets.REGISTRY_USER }}"
+  wfcheck "registry password comes from a secret" 'password: *\$\{\{ *secrets\.' "password: \${{ secrets.REGISTRY_PASSWORD }}"
+  if [ -n "$(wf_files)" ] && grep -Eh '^ *password: *' $(wf_files) </dev/null | grep -Evq 'password: *\$\{\{'; then
+    fail "no password written into a workflow" "replace it with \${{ secrets.REGISTRY_PASSWORD }} and rotate it"
+  else pass "no password written into a workflow"; fi
+  local code; code=$(http_code "$REGISTRY_URL/v2/_catalog")
+  case "$code" in
+    401) pass "registry refuses anonymous requests (401)" ;;
+    200) fail "registry refuses anonymous requests" "start it with REGISTRY_AUTH=htpasswd (Bonus step 2)" ;;
+    *)   skip "registry refuses anonymous requests" "registry not reachable at $REGISTRY_URL" ;;
+  esac
+}
+
+# =============================================================================
+main() {
+  local arg=${1:-}
+  if [ -z "$arg" ]; then sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2; fi
+  [ -d .git ] || warn "no .git here: run this from the root of devops-lab"
+  case "$arg" in
+    [0-9]) "stage$arg" ;;
+    bonus) stagebonus ;;
+    all) local s; for s in 0 1 2 3 4 5 6 7 8 9 bonus; do "stage$s"; done ;;
+    *) echo "unknown stage '$arg' (use 0-9, bonus or all)"; exit 2 ;;
+  esac
+  printf '\n%s%d passed%s, %s%d failed%s, %s%d skipped%s\n' "$G" "$PASS" "$N" "$R" "$FAIL" "$N" "$Y" "$SKIPPED" "$N"
+  [ "$FAIL" -eq 0 ]
+}
+main "$@"
