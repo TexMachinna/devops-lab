@@ -6,6 +6,8 @@
 #
 # Optional environment variables:
 #   PLATFORM_CONFIG_DIR   path to your platform-config clone (default: ../platform-config)
+#   REGISTRY_URL          lab registry address (default: http://localhost:5000)
+#   REGISTRY_USER / REGISTRY_PASSWORD   only needed after the Bonus turns on registry login
 #   SKIP_DOCKER=1         skip checks that build and run containers
 #   SKIP_SLOW=1           skip 'dotnet test' and other slow checks
 #   ORDERS_DIR, TESTS_DIR, INV_DIR, PHP_DIR   override the default folder names
@@ -22,6 +24,7 @@ TESTS_DIR=${TESTS_DIR:-tests/OrdersApi.Tests}
 INV_DIR=${INV_DIR:-src/inventory-api}
 PHP_DIR=${PHP_DIR:-src/supplier-portal}
 PLATFORM_CONFIG_DIR=${PLATFORM_CONFIG_DIR:-../platform-config}
+REGISTRY_URL=${REGISTRY_URL:-http://localhost:5000}
 WF_DIR=.github/workflows
 BREAKIT=docs/break-it.md
 SKIP_DOCKER=${SKIP_DOCKER:-0}
@@ -90,7 +93,36 @@ gh_ok() {
 }
 owner_lc() { echo "${SLUG%%/*}" | tr '[:upper:]' '[:lower:]'; }
 branch_rules() { gh api "repos/$SLUG/rules/branches/main" -q '[.[].type] | join(" ")' 2>/dev/null; }
-ghcr_has() { gh api "/users/$(owner_lc)/packages/container/$1" >/dev/null 2>&1; }
+
+# --- lab registry helpers ----------------------------------------------------
+# http_code URL -> prints the HTTP status (000 when unreachable)
+http_code() {
+  if have curl; then curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$1"
+  else python3 - "$1" <<'PY2'
+import sys, urllib.request, urllib.error
+try: print(urllib.request.urlopen(sys.argv[1], timeout=3).status)
+except urllib.error.HTTPError as e: print(e.code)
+except Exception: print("000")
+PY2
+  fi
+}
+registry_catalog() {
+  local auth=()
+  [ -n "${REGISTRY_USER:-}" ] && auth=(-u "$REGISTRY_USER:${REGISTRY_PASSWORD:-}")
+  have curl && curl -fsS --max-time 3 "${auth[@]}" "$REGISTRY_URL/v2/_catalog"
+}
+# registry_check REPO -> pass if the repository exists in the lab registry
+registry_check() {
+  local code; code=$(http_code "$REGISTRY_URL/v2/_catalog")
+  case "$code" in
+    200|401)
+      if [ "$code" = 401 ] && [ -z "${REGISTRY_USER:-}" ]; then
+        skip "$1 is in the lab registry" "registry needs a login: export REGISTRY_USER and REGISTRY_PASSWORD"
+      elif registry_catalog 2>/dev/null | grep -q "\"$1\""; then pass "$1 is in the lab registry ($REGISTRY_URL)"
+      else fail "$1 is in the lab registry ($REGISTRY_URL)" "merge to main so image-publish runs; check its log"; fi ;;
+    *) fail "lab registry answers at $REGISTRY_URL" "docker start lab-registry (Stage 7, step 2)" ;;
+  esac
+}
 
 # line number of the first line matching a regex (0 if none)
 line_of() { local n; n=$(grep -nE -- "$1" "$2" 2>/dev/null | head -1 | cut -d: -f1); echo "${n:-0}"; }
@@ -277,19 +309,25 @@ stage6() {
 }
 
 stage7() {
-  title 7 "Image pipeline to GHCR"
-  wfcheck "packages: write is granted" 'packages: *write' "on the image job only"
+  title 7 "Lab registry, self-hosted runner and image pipeline"
+  wfcheck "a job runs on the self-hosted runner" 'runs-on: *\[? *self-hosted' "runs-on: [self-hosted, lab] on image-publish"
+  wfcheck "the self-hosted job is gated to pushes" "event_name *== *['\"]push['\"]|inputs\.push" "if: github.event_name == 'push' (never PR code on your PC)"
+  wfcheck "pull requests build without pushing" "push: *false|push: *\\\$\{\{.*(event_name|inputs\.push)" "image-check: push: false on ubuntu-latest"
   wfcheck "uses docker/build-push-action" 'docker/build-push-action@' "Module 2 §09"
-  wfcheck "uses docker/setup-buildx-action" 'docker/setup-buildx-action@' "needed for the gha cache"
-  wfcheck "layer cache via type=gha" 'type=gha' "cache-from: type=gha and cache-to: type=gha,mode=max"
-  wfcheck "pull requests build without pushing" 'push: *\$\{\{.*github\.event_name' "push: \${{ github.event_name != 'pull_request' }}"
+  wfcheck "PR builds use a type=gha layer cache" 'type=gha' "cache-from: type=gha and cache-to: type=gha,mode=max on image-check"
   wfcheck "images are tagged by commit SHA" '(type=sha|GITHUB_SHA|github\.sha)' "docker/metadata-action with type=sha"
   if wf_has 'docker/metadata-action@'; then pass "tags and labels from docker/metadata-action"
-  else warn "docker/metadata-action not found (step 3)"; fi
+  else warn "docker/metadata-action not found (step 9)"; fi
+  if wf_has 'vars\.REGISTRY'; then pass "registry address comes from vars.REGISTRY"
+  else warn "registry address is hard-coded; a REGISTRY variable keeps it in one place (step 6)"; fi
   wfcheck "tag pushes (v*) trigger a build" "tags: *\\[? *['\"]?v\\*" "on: push: tags: ['v*']"
   if gh_ok; then
-    check "orders-api exists in GHCR" "merge to main, then check Packages on your profile" ghcr_has orders-api
-  else skip "orders-api exists in GHCR" "gh missing or not logged in"; fi
+    local st; st=$(gh api "repos/$SLUG/actions/runners" -q '.runners[] | select(any(.labels[]; .name=="lab")) | .status' 2>/dev/null | head -1)
+    if [ "$st" = online ]; then pass "self-hosted runner with label 'lab' is online"
+    elif [ -n "$st" ]; then fail "self-hosted runner with label 'lab' is online (status: $st)" "cd ~/actions-runner && sudo ./svc.sh start"
+    else fail "a self-hosted runner with label 'lab' is registered" "Settings > Actions > Runners > New self-hosted runner, --labels lab"; fi
+  else skip "self-hosted runner is online" "gh missing or not logged in"; fi
+  registry_check orders-api
 }
 
 stage8() {
@@ -314,9 +352,10 @@ stage8() {
   if [ -n "$compose" ] && docker_ok; then
     check "compose file is valid" "docker compose -f $compose config" docker compose -f "$compose" config -q
   else skip "compose file is valid" "Docker not available or no compose file"; fi
-  if gh_ok; then
-    check "inventory-api exists in GHCR" "merge a change under $INV_DIR" ghcr_has inventory-api
-  else skip "inventory-api exists in GHCR" "gh missing or not logged in"; fi
+  check "the reusable workflow publishes on the self-hosted runner" "a publish job with runs-on: [self-hosted, lab]" \
+    grep -Eq 'runs-on: *\[? *self-hosted' "${rw:-/dev/null}"
+  check "the reusable workflow takes a push input" "inputs: push: { type: boolean }" grep -Eq 'inputs\.push' "${rw:-/dev/null}"
+  registry_check inventory-api
 }
 
 stage9() {
@@ -329,49 +368,4 @@ stage9() {
   wfcheck "commit message links to the run" 'actions/runs/\$\{\{ *github\.run_id' "\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}"
   local pc=$PLATFORM_CONFIG_DIR app="$PLATFORM_CONFIG_DIR/apps/orders-api"
   if [ ! -d "$pc/.git" ]; then
-    fail "platform-config clone found at $pc" "clone it next to devops-lab, or set PLATFORM_CONFIG_DIR"; return
-  fi
-  pass "platform-config clone found at $pc"
-  check "base deployment exists" "apps/orders-api/base/deployment.yaml" test -f "$app/base/deployment.yaml"
-  local o; for o in dev stg prd; do
-    check "overlay $o exists" "apps/orders-api/overlays/$o/kustomization.yaml" test -f "$app/overlays/$o/kustomization.yaml"
-  done
-  local devk="$app/overlays/dev/kustomization.yaml"
-  if grep -Eq 'newTag: *["'\'']?latest' "$devk" 2>/dev/null; then fail "dev overlay pins a real tag" "never deploy latest"
-  else check "dev overlay pins a tag" "images: - name/newName/newTag" grep -q 'newTag:' "$devk"; fi
-  if have kubectl; then
-    check "dev overlay renders" "kubectl kustomize $app/overlays/dev" kubectl kustomize "$app/overlays/dev"
-  elif have kustomize; then
-    check "dev overlay renders" "kustomize build $app/overlays/dev" kustomize build "$app/overlays/dev"
-  else skip "dev overlay renders" "install kubectl"; fi
-  check "CI has committed to platform-config" "git -C $pc pull first; author must be ci-bot" \
-    sh -c "git -C '$pc' log --author=ci-bot --oneline | grep -q ."
-}
-
-stagebonus() {
-  title bonus "ACR with OIDC login"
-  wfcheck "logs in with azure/login" 'azure/login@' "Module 2 §09, Azure version"
-  wfcheck "requests an OIDC token (id-token: write)" 'id-token: *write' "on the calling job"
-  wfcheck "Azure IDs come from variables" 'vars\.AZURE_CLIENT_ID' "none of them is a secret"
-  wfcheck "logs Docker in to ACR" 'az acr login' "az acr login --name <acrname>"
-  if [ -z "$(wf_files)" ]; then fail "no stored ACR or Azure password" "no workflows found yet"
-  elif wf_has 'secrets\.[A-Z_]*(ACR|AZURE)[A-Z_]*(PASS|SECRET|PWD)'; then
-    fail "no stored ACR or Azure password" "OIDC needs no password; delete that secret"
-  else pass "no stored ACR or Azure password"; fi
-}
-
-# =============================================================================
-main() {
-  local arg=${1:-}
-  if [ -z "$arg" ]; then sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 2; fi
-  [ -d .git ] || warn "no .git here: run this from the root of devops-lab"
-  case "$arg" in
-    [0-9]) "stage$arg" ;;
-    bonus) stagebonus ;;
-    all) local s; for s in 0 1 2 3 4 5 6 7 8 9 bonus; do "stage$s"; done ;;
-    *) echo "unknown stage '$arg' (use 0-9, bonus or all)"; exit 2 ;;
-  esac
-  printf '\n%s%d passed%s, %s%d failed%s, %s%d skipped%s\n' "$G" "$PASS" "$N" "$R" "$FAIL" "$N" "$Y" "$SKIPPED" "$N"
-  [ "$FAIL" -eq 0 ]
-}
-main "$@"
+    fail "platform-config clone found at $pc" "clone it next to devops-lab, or set PLATFORM_C
