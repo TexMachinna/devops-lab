@@ -3,6 +3,7 @@ name: CI
 on: # Triggers with
   push:
     branches: [main] # every merge to main
+    tags: ['v*']
     paths:
       - "src/orders-api/**"
       - "tests/OrdersApi.Tests/**"
@@ -96,3 +97,40 @@ jobs:
           name: test-results
           path: TestResults/*.trx
           retention-days: 7
+
+  image-check:
+    needs: test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: src/orders-api
+          push: false
+          tags: orders-api:pr-check
+          cache-from: type=gha,scope=orders-api
+          cache-to: type=gha,mode=max,scope=orders-api
+
+  image-publish:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, lab]
+    outputs:
+      tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ vars.REGISTRY }}/orders-api
+          tags: |
+            type=sha
+            type=semver,pattern={{version}}
+      - uses: docker/build-push-action@v7
+        with:
+          context: src/orders-api
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels}}
