@@ -45,7 +45,7 @@ jobs:
 
   build: # job id; the ruleset will require "build"
     needs: changes
-    if: needs.changes.outputs.orders == true
+    if: needs.changes.outputs.orders == 'true'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.vars.outputs.tag }}
@@ -89,6 +89,7 @@ jobs:
   
   test:
     needs: [changes, build]
+    if: needs.changes.outputs.orders == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -122,6 +123,7 @@ jobs:
   
   orders-image:
     needs: [changes, test]
+    if: needs.changes.outputs.orders == 'true'
     uses: ./.github/workflows/build-image.yml
     with:
       app-name: orders-api
