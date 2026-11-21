@@ -15,17 +15,6 @@ Fill each entry **before** looking anything up: write your guess first, then con
 
 ---
 
-## Measurements
-
-| What | Before | After | Notes |
-| --- | --- | --- | --- |
-| Stage 3: CI run, NuGet cache miss vs hit | | | |
-| Stage 4: Python rebuild, slow order vs fast order | | | |
-| Stage 5: image sizes (sdk / aspnet / mine) | | | |
-| Stage 7: image job, cold vs warm layer cache | | | |
-
----
-
 ## Stage 0 — Setup
 
 ### 0.1 Docker daemon stopped
@@ -236,24 +225,43 @@ When a fix doesn't show up, I check which image is actually running: its revisio
 ### 7.1 Runner offline during a merge
 
 - **Symptom (job status and message):**
+During the job that gets handled by my self-hosted runner, Git shows "Waiting for arunner to pick up
+this job" and doesn't continue with the pipeline, nor fails or exits it.
 - **My guess:**
+My self-hosted runner might not be running
 - **Confirmed with:**
+Checking the runner's status through Git's GUI, in which the runner appeared as Offline
 - **Cause:**
+Runner was stopped locally
 - **Fix:**
+Started the runner (./svc.sh start)
 - **Interview line:**
+If a job that's supposed to be handled by a self-hosted runner is stopped, it's a good idea to check
+its status trough Git's runner section to see if its online. If it isn't, checking its status locally
+and troubleshoot is the best option
 
 ### 7.2 Registry down during a publish
 
 - **Symptom (exact push error):**
+Error: buildx failed with: failed to build: failed to solve: failed to push localhost:5000/orders-api:sha-33ad449: failed to do request: Head "https://localhost:5000/v2/orders-api/blobs/sha256:2134cabc5f328f9c3919aeef221f7171dbb93bbe2a41e7bc01281c2a6653d575": dial tcp 127.0.0.1:5000: connect: connection refused
 - **My guess:**
+Registry container is down
 - **Confirmed with:**
+Checked my containers and saw the registry one was stopped (docker ps)
 - **Cause:**
+Registry was intentionally stopped
 - **Fix:**
+Resumed the container and re-ran the pipeline, which finished successfully
 - **Interview line:**
+I separate build failures from push failures in the log. Connection refused on push is infrastructure, not the Dockerfile
 
 ### 7.3 Pull request: image-check ran, image-publish skipped
 
 - **Where each job ran (runner name), and the log line that proves nothing was pushed:**
+My first jobs, related to build checks, ran on a GitHub ephemeral VM, once those passed, the code
+reach my self-hosted runner. Each job has a 'runner name:', for Git VMs it shows 'GitHub Actions...'
+plus the VM's OS version, in this case 'ubuntu-24.04' (matching the 'ubuntu-latest' setup), and
+my runner's name, in this case 'wsl-hosted-runner', along with my local machine's name
 
 ## Stage 8 — Reusable workflow and monorepo
 
