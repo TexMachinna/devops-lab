@@ -129,3 +129,29 @@ jobs:
       app-name: orders-api
       context: src/orders-api
       push: ${{ github.event_name == 'push'}}
+
+  inventory-test:
+    needs: changes
+    if: needs.changes.outputs.inventory == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/inventory-api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/inventory-api/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -v
+
+  inventory-image:
+    needs: [changes, inventory-test]
+    if: needs.changes.outputs.inventory == 'true'
+    uses: ./.github/workflows/build-image.yml
+    with:
+      app-name: inventory-api
+      context: src/inventory-api
+      push: ${{ github.event_name == 'push' }}
