@@ -4,11 +4,6 @@ on: # Triggers with
   push:
     branches: [main] # every merge to main
     tags: ['v*']
-    paths:
-      - "src/orders-api/**"
-      - "tests/OrdersApi.Tests/**"
-      - "devops-lab.slnx"
-      - ".github/workflows/ci.yml"
   pull_request: # every PR, on every new commit
   workflow_dispatch:
     inputs:
@@ -23,7 +18,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read        # for actions/checkout
+      pull-requests: read   # on PRs, paths-filter asks the GitHub API for the changed files
+    outputs:
+      orders: ${{ steps.filter.outputs.orders == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+      inventory: ${{ steps.filter.outputs.inventory == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d
+        with:
+          filters: |
+            orders:
+              - 'src/orders-api/**'
+              - 'tests/OrdersApi.Tests/**'
+              - 'devops-lab.slnx'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/build-image.yml'
+            inventory:
+              - 'src/inventory-api/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/build-image.yml'
+
   build: # job id; the ruleset will require "build"
+    needs: changes
+    if: needs.changes.outputs.orders == true
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.vars.outputs.tag }}
@@ -66,7 +88,7 @@ jobs:
           echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
   
   test:
-    needs: build
+    needs: [changes, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -99,7 +121,7 @@ jobs:
           retention-days: 7
   
   orders-image:
-    needs: test
+    needs: [changes, test]
     uses: ./.github/workflows/build-image.yml
     with:
       app-name: orders-api
