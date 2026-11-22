@@ -155,3 +155,19 @@ jobs:
       app-name: inventory-api
       context: src/inventory-api
       push: ${{ github.event_name == 'push' }}
+
+  ci-ok:
+    if: always()
+    needs: [changes, build, test, orders-image, inventory-test, inventory-image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ')}}
+        run: |
+          echo "Job results: $RESULTS"
+          if [[ "$RESULTS" == *failure* || "$RESULTS" == *cancelled* ]]; then
+            echo "::error::At least one job failed or was cancelled"
+            exit 1
+          fi
+          echo "All good"
