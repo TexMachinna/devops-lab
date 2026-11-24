@@ -268,10 +268,12 @@ my runner's name, in this case 'wsl-hosted-runner', along with my local machine'
 ### 8.1 PR touching only `inventory-api`
 
 - **What ran, what was skipped:**
+After the setup and changes made through 'ci-ok', the only jobs that ran were those related to inventory-api, shuch as inventory-test and inventory-image/check, the rest of the jobs that covered the .NET api were skipped as intended, since the PR didn't touch them.
 
 ### 8.2 README-only PR (the 3.1 trap, revisited)
 
 - **Result now, and why:**
+All the jobs where skipped besides the dorny one, which is the first job that tracks changes to the files. Since README.md isn't tied to any of the apis and it doesn't live under any of their folders, the pipeline worked as intended.
 
 ### 8.3 A broken Python test
 
