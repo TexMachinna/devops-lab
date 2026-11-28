@@ -24,3 +24,4 @@ app.MapGet("/api/info", (IConfiguration config, IWebHostEnvironment env) =>
     }));
 
 app.Run();
+// drill 8.4
