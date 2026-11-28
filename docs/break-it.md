@@ -278,6 +278,7 @@ All the jobs where skipped besides the dorny one, which is the first job that tr
 ### 8.3 A broken Python test
 
 - **What `ci-ok` did, and why:**
+The python test (inventory-test with test_app.py) failed, so the rest of the jobs were skipped, and 'ci-ok' failed as well, since it tracks 'inventory-test', which didn't pass.
 
 ### 8.4 One runner, two queued publish jobs
 
