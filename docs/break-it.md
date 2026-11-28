@@ -276,11 +276,12 @@ After the setup and changes made through 'ci-ok', the only jobs that ran were th
 All the jobs where skipped besides the dorny one, which is the first job that tracks changes to the files. Since README.md isn't tied to any of the apis and it doesn't live under any of their folders, the pipeline worked as intended.
 
 ### 8.3 A broken Python test
-The python test (inventory-test with test_app.py) failed, so the rest of the jobs were skipped, and 'ci-ok' failed as well, since it tracks 'inventory-test', which didn't pass.
-- **What `ci-ok` did, and why:**
 
+- **What `ci-ok` did, and why:**
+The python test (inventory-test with test_app.py) failed, so the rest of the jobs were skipped, and 'ci-ok' failed as well, since it tracks 'inventory-test', which didn't pass.
 
 ### 8.4 One runner, two queued publish jobs
+I turned off my self-hosted runner before merging to main, then, I did the merge and both publish jobs were waiting for an available runner. I resumed the runner and it processed the jobs one by one, triggering the second only after the first was finished. In a repository with a team doing multiple merges at once, a single runner for one label can be a point of failure, since it can delay the deployments or simply not process them if its offline.S
 
 - **What happened while the runner was stopped:**
 - **What happened after it started again (order, timing):**
